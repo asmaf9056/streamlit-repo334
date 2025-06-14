@@ -53,6 +53,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def get_api_key():
+    """Get API key from secrets or user input"""
+    # Try to get from Streamlit secrets first
+    try:
+        if hasattr(st, 'secrets') and 'GOOGLE_API_KEY' in st.secrets:
+            return st.secrets['GOOGLE_API_KEY']
+    except:
+        pass
+    
+    # Fall back to user input
+    return None
+
 def initialize_session_state():
     """Initialize session state variables"""
     if 'chat_history' not in st.session_state:
@@ -128,18 +140,28 @@ def main():
     st.markdown('<h1 class="main-header">🤖 Datacrumbs Chat Bot</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Chat with Datacrumbs website using AI</p>', unsafe_allow_html=True)
     
+    # Get API key from secrets or user input
+    api_key_from_secrets = get_api_key()
+    
     # Sidebar
     with st.sidebar:
         st.header("🔧 Setup")
         
-        # API Key input
+        # API Key section
         st.subheader("Google Gemini API Key")
-        api_key = st.text_input(
-            "Enter your API key:",
-            type="password",
-            placeholder="AIza...",
-            help="Get your API key from Google AI Studio"
-        )
+        
+        if api_key_from_secrets:
+            st.success("✅ API Key loaded from secrets")
+            api_key = api_key_from_secrets
+            st.info("Using pre-configured API key")
+        else:
+            st.info("💡 API key not found in secrets")
+            api_key = st.text_input(
+                "Enter your API key:",
+                type="password",
+                placeholder="AIza...",
+                help="Get your API key from Google AI Studio"
+            )
         
         st.markdown("---")
         
@@ -253,7 +275,7 @@ def main():
         st.markdown("""
         ### Steps:
         1. **Get API Key**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
-        2. **Enter API Key**: Paste it in the sidebar
+        2. **Enter API Key**: Paste it in the sidebar (or use secrets.toml)
         3. **Load Website**: Click "Load Website Content"
         4. **Ask Questions**: Type questions about Datacrumbs or creative questions
         
