@@ -1,179 +1,241 @@
 import streamlit as st
-import google.generativeai as genai
 import os
-from datetime import datetime
+from langchain_community.document_loaders import WebBaseLoader
+from langchain.text_splitter import CharacterTextSplitter
+from langchain_google_genai import GoogleGenerativeAI
+from langchain.chains.question_answering import load_qa_chain
+from langchain.schema import Document
+import time
+from typing import List
 
-# Configure page
+# Page configuration
 st.set_page_config(
-    page_title="Datacrumbs Chat",
+    page_title="Datacrumbs Website Chatbot",
     page_icon="🤖",
-    layout="centered"
+    layout="wide"
 )
 
-# Custom CSS for chat interface
-st.markdown("""
-<style>
-    .chat-container {
-        max-height: 400px;
-        overflow-y: auto;
-        padding: 1rem;
-        border: 1px solid #ddd;
-        border-radius: 10px;
-        margin: 1rem 0;
-    }
-    .user-msg {
-        background-color: #e3f2fd;
-        padding: 0.8rem;
-        border-radius: 10px;
-        margin: 0.5rem 0;
-        border-left: 4px solid #2196f3;
-    }
-    .bot-msg {
-        background-color: #f1f8e9;
-        padding: 0.8rem;
-        border-radius: 10px;
-        margin: 0.5rem 0;
-        border-left: 4px solid #4caf50;
-    }
-    .sample-box {
-        background-color: #fff3e0;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Title and description
+st.title("🤖 Chat with Datacrumbs Website")
+st.markdown("Ask questions about the Datacrumbs website content or any creative questions!")
 
-# App title
-st.title("🤖 Chat with Datacrumbs")
-st.markdown("Ask me anything about Datacrumbs or creative questions!")
-
-# Simple API key input for testing
-api_key = st.text_input("🔑 Enter your Google API Key:", type="password", help="Get your key from https://aistudio.google.com/app/apikey")
-
-if not api_key:
-    st.warning("⚠️ Please enter your Google API Key above to start chatting.")
-    st.info("Get your free API key from: https://aistudio.google.com/app/apikey")
-    st.stop()
-
-# Configure Gemini
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
-
-# Sample website content (simulated for speed)
-DATACRUMBS_INFO = """
-Datacrumbs is a data analytics platform that helps businesses transform raw data into actionable insights. 
-We specialize in:
-- Data visualization and dashboard creation
-- Analytics consulting and strategy
-- Data science training and workshops
-- Business intelligence solutions
-
-Founded by experienced data scientists, Datacrumbs serves companies of all sizes to make data-driven decisions.
-Our mission is to make data analytics accessible and valuable for every organization.
-"""
-
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Sample questions
-st.markdown("""
-<div class="sample-box">
-    <h4>💡 Try these questions:</h4>
-    <p><strong>About Datacrumbs:</strong></p>
-    <ul>
-        <li>What is Datacrumbs?</li>
-        <li>What services do you offer?</li>
-        <li>Who founded Datacrumbs?</li>
-    </ul>
-    <p><strong>Creative:</strong></p>
-    <ul>
-        <li>Write a haiku about data science</li>
-        <li>Tell me a story about magic spreadsheets</li>
-    </ul>
-</div>
-""", unsafe_allow_html=True)
-
-# Display chat history
-if st.session_state.messages:
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-    for message in st.session_state.messages:
-        if message["role"] == "user":
-            st.markdown(f"""
-            <div class="user-msg">
-                <strong>🧑 You:</strong><br>
-                {message["content"]}
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="bot-msg">
-                <strong>🤖 Assistant:</strong><br>
-                {message["content"]}
-            </div>
-            """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Chat input
-user_input = st.text_input("💬 Your question:", placeholder="Type your message here...", key="user_input")
-
-if user_input:
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": user_input})
+# Sidebar for API key input
+with st.sidebar:
+    st.header("🔐 Configuration")
+    api_key = st.text_input(
+        "Enter your Google Gemini API Key:",
+        type="password",
+        help="Your API key will not be stored and is only used for this session."
+    )
     
-    # Generate response
-    try:
-        # Check if question is about Datacrumbs
-        if any(keyword in user_input.lower() for keyword in 
-               ['datacrumbs', 'service', 'offer', 'company', 'about', 'what is', 'founded', 'team']):
-            
-            # Website-related response
-            prompt = f"""
-            Based on this information about Datacrumbs: {DATACRUMBS_INFO}
-            
-            Question: {user_input}
-            
-            Please provide a helpful answer about Datacrumbs based on the information provided.
-            Keep it concise and informative.
-            """
-        else:
-            # Creative/general response - keep it short and varied
-            prompt = f"Give a brief, helpful response to: {user_input}"
-        
-        # Get response from Gemini with rate limiting
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=100,
-                temperature=0.7,
-            )
-        )
-        bot_response = response.text
-        
-        # Add bot response
-        st.session_state.messages.append({"role": "assistant", "content": bot_response})
-        
-        # Refresh to show new messages
-        st.rerun()
-        
-    except Exception as e:
-        if "429" in str(e) or "quota" in str(e).lower():
-            st.error("⏰ **Rate limit reached!** Please wait 1-2 minutes before asking another question.")
-            st.info("💡 Free tier allows 15 requests per minute. Consider upgrading for unlimited usage.")
-        else:
-            st.error(f"❌ Error: {str(e)}")
-            st.info("Please try again or rephrase your question.")
+    if api_key:
+        st.success("API Key provided ✅")
+    else:
+        st.warning("Please provide your Google Gemini API key to continue.")
+    
+    st.markdown("---")
+    st.markdown("### 💡 Sample Questions")
+    st.markdown("""
+    **Website-related:**
+    - What is Datacrumbs about?
+    - What services does Datacrumbs offer?
+    - Who is the team behind Datacrumbs?
+    
+    **Creative:**
+    - Write a haiku about data science
+    - What's the meaning of life?
+    """)
 
-# Clear chat button
-if st.button("🗑️ Clear Chat", type="secondary"):
-    st.session_state.messages = []
-    st.rerun()
+# Initialize session state
+if 'website_loaded' not in st.session_state:
+    st.session_state.website_loaded = False
+if 'documents' not in st.session_state:
+    st.session_state.documents = []
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+
+@st.cache_data
+def load_website_content():
+    """Load and process website content with caching"""
+    try:
+        with st.spinner("Loading Datacrumbs website content..."):
+            # Load website content
+            loader = WebBaseLoader("https://datacrumbs.org/")
+            documents = loader.load()
+            
+            # Split text into chunks
+            text_splitter = CharacterTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200,
+                separator="\n"
+            )
+            
+            # Split documents
+            split_docs = text_splitter.split_documents(documents)
+            
+            return split_docs
+    except Exception as e:
+        st.error(f"Error loading website: {str(e)}")
+        return []
+
+def get_answer(question: str, documents: List[Document], api_key: str):
+    """Get answer using LangChain and Google Gemini"""
+    try:
+        # Initialize the Google Gemini LLM
+        llm = GoogleGenerativeAI(
+            model="gemini-pro",
+            google_api_key=api_key,
+            temperature=0.7
+        )
+        
+        # Create QA chain
+        chain = load_qa_chain(llm, chain_type="stuff")
+        
+        # Get answer
+        with st.spinner("Thinking..."):
+            # Add rate limiting
+            time.sleep(1)
+            
+            if documents:
+                # If we have website documents, use them for context
+                response = chain.run(input_documents=documents, question=question)
+            else:
+                # For creative questions, create a simple document
+                creative_doc = Document(
+                    page_content="This is a creative question that doesn't require website context.",
+                    metadata={"source": "creative"}
+                )
+                response = chain.run(input_documents=[creative_doc], question=question)
+            
+            return response
+            
+    except Exception as e:
+        if "quota" in str(e).lower() or "limit" in str(e).lower():
+            return "⚠️ API quota exceeded. Please wait and try again later, or check your Google Cloud Console for quota limits."
+        else:
+            return f"Error: {str(e)}"
+
+# Main application logic
+if api_key:
+    # Load website content if not already loaded
+    if not st.session_state.website_loaded:
+        documents = load_website_content()
+        if documents:
+            st.session_state.documents = documents
+            st.session_state.website_loaded = True
+            st.success(f"✅ Website loaded successfully! Found {len(documents)} content chunks.")
+        else:
+            st.error("Failed to load website content.")
+    
+    # Chat interface
+    st.markdown("---")
+    
+    # Display chat history
+    if st.session_state.chat_history:
+        st.subheader("💬 Chat History")
+        for i, (q, a) in enumerate(st.session_state.chat_history):
+            with st.expander(f"Question {i+1}: {q[:50]}..."):
+                st.write(f"**Q:** {q}")
+                st.write(f"**A:** {a}")
+    
+    # Question input
+    st.subheader("❓ Ask a Question")
+    
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        question = st.text_input(
+            "Your question:",
+            placeholder="e.g., What is Datacrumbs about?",
+            key="question_input"
+        )
+    
+    with col2:
+        ask_button = st.button("Ask", type="primary", use_container_width=True)
+    
+    # Quick question buttons
+    st.markdown("**Quick Questions:**")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("What is Datacrumbs?"):
+            question = "What is Datacrumbs about and what do they do?"
+            ask_button = True
+    
+    with col2:
+        if st.button("Services offered"):
+            question = "What services or products does Datacrumbs offer?"
+            ask_button = True
+    
+    with col3:
+        if st.button("Team info"):
+            question = "Who is behind Datacrumbs and what's their background?"
+            ask_button = True
+    
+    with col4:
+        if st.button("Creative question"):
+            question = "Write a short poem about the beauty of data analysis and insights."
+            ask_button = True
+    
+    # Process question
+    if ask_button and question:
+        # Determine if question is about the website or creative
+        website_keywords = ['datacrumbs', 'website', 'service', 'team', 'about', 'offer', 'company']
+        is_website_question = any(keyword in question.lower() for keyword in website_keywords)
+        
+        # Get answer
+        if is_website_question and st.session_state.documents:
+            answer = get_answer(question, st.session_state.documents, api_key)
+        else:
+            # For creative questions, use empty documents
+            answer = get_answer(question, [], api_key)
+        
+        # Display answer
+        st.subheader("🤖 Answer")
+        st.write(answer)
+        
+        # Add to chat history
+        st.session_state.chat_history.append((question, answer))
+        
+        # Clear input
+        st.session_state.question_input = ""
+        
+        # Rerun to update the interface
+        st.experimental_rerun()
+
+else:
+    st.info("👈 Please enter your Google Gemini API key in the sidebar to start chatting!")
+    
+    # Instructions for getting API key
+    with st.expander("🔑 How to get a Google Gemini API Key"):
+        st.markdown("""
+        1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+        2. Sign in with your Google account
+        3. Click "Create API Key"
+        4. Copy the generated API key
+        5. Paste it in the sidebar
+        
+        **Important:** Keep your API key secure and never share it publicly!
+        """)
 
 # Footer
 st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #666; font-size: 0.8rem;">
-    Built with Streamlit & Google Gemini | Visit: <a href="https://datacrumbs.org" target="_blank">datacrumbs.org</a>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("**⚠️ Security Note:** This app uses secure practices - your API key is not stored and is only used during your session.")
+
+# Usage instructions
+with st.expander("📖 How to use this app"):
+    st.markdown("""
+    1. **Enter API Key:** Provide your Google Gemini API key in the sidebar
+    2. **Wait for Loading:** The app will automatically load the Datacrumbs website content
+    3. **Ask Questions:** Type your question or use the quick question buttons
+    4. **View Answers:** The AI will respond based on website content or general knowledge
+    
+    **Question Types:**
+    - **Website-related:** Questions about Datacrumbs content will use the loaded website data
+    - **Creative/General:** Other questions will be answered using the AI's general knowledge
+    
+    **Tips:**
+    - Be specific in your questions for better answers
+    - Check the chat history to see previous Q&As
+    - If you hit rate limits, wait a few minutes before asking more questions
+    """)
