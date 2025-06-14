@@ -16,34 +16,32 @@ st.set_page_config(
 )
 
 # Title and description
-st.title("🤖 Chat with Datacrumbs Website")
-st.markdown("Ask questions about the Datacrumbs website content or any creative questions!")
+st.title("🛍️ Datacrumbs Sales Assistant")
+st.markdown("**Your AI sales assistant for http://www.datacrumbs.org**")
+st.markdown("*Ask me anything about Datacrumbs services, products, pricing, or company information!*")
 
-# Sidebar for API key input
+# Load API key from environment variable
+api_key = os.getenv('GOOGLE_API_KEY')
+
+# Sidebar for information
 with st.sidebar:
-    st.header("🔐 Configuration")
-    api_key = st.text_input(
-        "Enter your Google Gemini API Key:",
-        type="password",
-        help="Your API key will not be stored and is only used for this session."
-    )
+    st.header("📊 Sales Information")
     
     if api_key:
-        st.success("API Key provided ✅")
+        st.success("Sales Assistant Ready ✅")
     else:
-        st.warning("Please provide your Google Gemini API key to continue.")
+        st.error("API Key not found in environment variables")
+        st.markdown("Please set GOOGLE_API_KEY environment variable")
     
     st.markdown("---")
-    st.markdown("### 💡 Sample Questions")
+    st.markdown("### 💼 What I can help with:")
     st.markdown("""
-    **Website-related:**
-    - What is Datacrumbs about?
-    - What services does Datacrumbs offer?
-    - Who is the team behind Datacrumbs?
-    
-    **Creative:**
-    - Write a haiku about data science
-    - What's the meaning of life?
+    - **Company Information** - About Datacrumbs
+    - **Services & Products** - What we offer
+    - **Pricing & Packages** - Cost information
+    - **Contact Details** - How to reach us
+    - **Technical Specs** - Product features
+    - **Support** - Customer service info
     """)
 
 # Initialize session state
@@ -58,141 +56,183 @@ if 'chat_history' not in st.session_state:
 def load_website_content():
     """Load and process website content with caching"""
     try:
-        with st.spinner("Loading Datacrumbs website content..."):
-            # Load website content
-            loader = WebBaseLoader("https://datacrumbs.org/")
+        with st.spinner("🔍 Scraping Datacrumbs website content..."):
+            # Load website content from the correct URL
+            url = "http://www.datacrumbs.org"
+            loader = WebBaseLoader(
+                web_paths=[url],
+                bs_kwargs={
+                    "parse_only": None,  # Parse the entire page
+                    "features": "html.parser"
+                }
+            )
+            
+            # Load the documents
             documents = loader.load()
             
-            # Split text into chunks
+            if not documents:
+                st.error("No content found on the website")
+                return []
+            
+            # Display info about loaded content
+            total_chars = sum(len(doc.page_content) for doc in documents)
+            st.info(f"📄 Loaded {len(documents)} page(s) with {total_chars:,} characters from {url}")
+            
+            # Split text into chunks for better processing
             text_splitter = CharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200,
-                separator="\n"
+                chunk_size=1500,  # Larger chunks for better context
+                chunk_overlap=300,
+                separator="\n\n"  # Split on paragraphs first
             )
             
             # Split documents
             split_docs = text_splitter.split_documents(documents)
             
+            st.success(f"✅ Content split into {len(split_docs)} chunks for processing")
+            
             return split_docs
+            
     except Exception as e:
-        st.error(f"Error loading website: {str(e)}")
+        st.error(f"❌ Error loading website: {str(e)}")
+        st.info("Please check if the website is accessible and try again.")
         return []
 
 def get_answer(question: str, documents: List[Document], api_key: str):
-    """Get answer using LangChain and Google Gemini"""
+    """Get answer using LangChain and Google Gemini - Website content only"""
     try:
-        # Initialize the Google Gemini LLM
+        # Check if we have website content
+        if not documents or len(documents) == 0:
+            return "❌ **Website Content Not Available**\n\nI need to load the Datacrumbs website content first to answer your questions. Please wait for the content to load or refresh the page."
+        
+        # Initialize the Google Gemini LLM with settings optimized for sales
         llm = GoogleGenerativeAI(
             model="gemini-pro",
             google_api_key=api_key,
-            temperature=0.7
+            temperature=0.2  # Low temperature for factual, consistent responses
         )
         
-        # Create QA chain
-        chain = load_qa_chain(llm, chain_type="stuff")
+        # Create QA chain with sales-focused prompting
+        chain = load_qa_chain(
+            llm, 
+            chain_type="stuff"
+        )
         
         # Get answer
-        with st.spinner("Thinking..."):
+        with st.spinner("🔍 Searching Datacrumbs website content..."):
             # Add rate limiting
             time.sleep(1)
             
-            if documents:
-                # If we have website documents, use them for context
-                response = chain.run(input_documents=documents, question=question)
-            else:
-                # For creative questions, create a simple document
-                creative_doc = Document(
-                    page_content="This is a creative question that doesn't require website context.",
-                    metadata={"source": "creative"}
-                )
-                response = chain.run(input_documents=[creative_doc], question=question)
+            # Always use website content and frame as sales assistant
+            sales_prompt = f"""You are a helpful sales assistant for Datacrumbs. Based ONLY on the provided website content, answer the following question about Datacrumbs services, products, or company information. 
+
+If the information is not available in the website content, politely say so and suggest contacting Datacrumbs directly.
+
+Be professional, helpful, and sales-oriented in your response.
+
+Question: {question}"""
             
-            return response
+            response = chain.run(
+                input_documents=documents, 
+                question=sales_prompt
+            )
+            
+            return f"🛍️ **Datacrumbs Sales Assistant:**\n\n{response}\n\n---\n*Need more information? Contact Datacrumbs directly for detailed assistance.*"
             
     except Exception as e:
         if "quota" in str(e).lower() or "limit" in str(e).lower():
-            return "⚠️ API quota exceeded. Please wait and try again later, or check your Google Cloud Console for quota limits."
+            return "⚠️ **API Quota Exceeded**\n\nOur service is temporarily unavailable due to high demand. Please try again in a few minutes."
+        elif "api" in str(e).lower() and "key" in str(e).lower():
+            return "🔑 **Service Configuration Error**\n\nPlease contact support - there's an issue with our API configuration."
         else:
-            return f"Error: {str(e)}"
+            return f"❌ **Service Error**\n\nSorry, I'm experiencing technical difficulties. Please try again or contact Datacrumbs directly.\n\nError details: {str(e)}"
 
 # Main application logic
 if api_key:
     # Load website content if not already loaded
     if not st.session_state.website_loaded:
-        documents = load_website_content()
-        if documents:
-            st.session_state.documents = documents
-            st.session_state.website_loaded = True
-            st.success(f"✅ Website loaded successfully! Found {len(documents)} content chunks.")
-        else:
-            st.error("Failed to load website content.")
+        with st.status("🔄 Loading Datacrumbs website...", expanded=True) as status:
+            st.write("Connecting to http://www.datacrumbs.org...")
+            documents = load_website_content()
+            
+            if documents:
+                st.session_state.documents = documents
+                st.session_state.website_loaded = True
+                status.update(label="✅ Website content loaded successfully!", state="complete")
+                
+                # Show some stats about the loaded content
+                total_content = " ".join([doc.page_content for doc in documents])
+                word_count = len(total_content.split())
+                st.info(f"📊 **Content Stats:** {len(documents)} chunks, ~{word_count:,} words scraped from Datacrumbs")
+            else:
+                status.update(label="❌ Failed to load website content", state="error")
+                st.error("Could not scrape content from http://www.datacrumbs.org")
+                st.info("The app will still work for creative questions using general AI knowledge.")
     
     # Chat interface
     st.markdown("---")
     
     # Display chat history
     if st.session_state.chat_history:
-        st.subheader("💬 Chat History")
+        st.subheader("💬 Conversation History")
         for i, (q, a) in enumerate(st.session_state.chat_history):
-            with st.expander(f"Question {i+1}: {q[:50]}..."):
-                st.write(f"**Q:** {q}")
-                st.write(f"**A:** {a}")
+            with st.expander(f"Q{i+1}: {q[:60]}..." if len(q) > 60 else f"Q{i+1}: {q}"):
+                st.write(f"**Customer:** {q}")
+                st.markdown(f"**Sales Assistant:** {a}")
     
     # Question input
-    st.subheader("❓ Ask a Question")
+    st.subheader("❓ Ask About Datacrumbs")
     
     col1, col2 = st.columns([4, 1])
     
     with col1:
         question = st.text_input(
-            "Your question:",
-            placeholder="e.g., What is Datacrumbs about?",
+            "What would you like to know about Datacrumbs?",
+            placeholder="e.g., What services do you offer? What are your prices?",
             key="question_input"
         )
     
     with col2:
         ask_button = st.button("Ask", type="primary", use_container_width=True)
     
-    # Quick question buttons
+    # Quick question buttons - Sales focused
     st.markdown("**Quick Questions:**")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("What is Datacrumbs?"):
-            question = "What is Datacrumbs about and what do they do?"
+        if st.button("🏢 About Company"):
+            question = "Tell me about Datacrumbs - what does the company do and what's your mission?"
             ask_button = True
     
     with col2:
-        if st.button("Services offered"):
-            question = "What services or products does Datacrumbs offer?"
+        if st.button("📋 Services & Products"):
+            question = "What services and products does Datacrumbs offer? What solutions do you provide?"
             ask_button = True
     
     with col3:
-        if st.button("Team info"):
-            question = "Who is behind Datacrumbs and what's their background?"
+        if st.button("💰 Pricing & Packages"):
+            question = "What are your pricing options? Do you offer different packages or plans?"
             ask_button = True
     
     with col4:
-        if st.button("Creative question"):
-            question = "Write a short poem about the beauty of data analysis and insights."
+        if st.button("📞 Contact & Support"):
+            question = "How can I contact Datacrumbs? What support options are available?"
             ask_button = True
     
     # Process question
     if ask_button and question:
-        # Determine if question is about the website or creative
-        website_keywords = ['datacrumbs', 'website', 'service', 'team', 'about', 'offer', 'company']
-        is_website_question = any(keyword in question.lower() for keyword in website_keywords)
-        
-        # Get answer
-        if is_website_question and st.session_state.documents:
-            answer = get_answer(question, st.session_state.documents, api_key)
+        # Always use website content for sales assistance
+        if st.session_state.documents:
+            st.info("🔍 Searching Datacrumbs website for your answer...")
         else:
-            # For creative questions, use empty documents
-            answer = get_answer(question, [], api_key)
+            st.error("⚠️ Website content not loaded - please wait for content to load first.")
+        
+        # Get answer (always use website content)
+        answer = get_answer(question, st.session_state.documents, api_key)
         
         # Display answer
-        st.subheader("🤖 Answer")
-        st.write(answer)
+        st.markdown("---")
+        st.subheader("🛍️ Sales Assistant Response")
+        st.markdown(answer)
         
         # Add to chat history
         st.session_state.chat_history.append((question, answer))
@@ -204,38 +244,52 @@ if api_key:
         st.experimental_rerun()
 
 else:
-    st.info("👈 Please enter your Google Gemini API key in the sidebar to start chatting!")
+    st.error("🔑 Google API Key not found!")
+    st.info("The sales assistant needs an API key to function. Please set up your environment variable.")
     
-    # Instructions for getting API key
-    with st.expander("🔑 How to get a Google Gemini API Key"):
+    # Instructions for setting up environment variable
+    with st.expander("🔧 How to set up the environment variable"):
         st.markdown("""
-        1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-        2. Sign in with your Google account
-        3. Click "Create API Key"
-        4. Copy the generated API key
-        5. Paste it in the sidebar
+        **Option 1: .env file (Recommended)**
+        1. Create a `.env` file in your project directory
+        2. Add this line: `GOOGLE_API_KEY=your_api_key_here`
+        3. Make sure to add `.env` to your `.gitignore` file
         
-        **Important:** Keep your API key secure and never share it publicly!
+        **Option 2: Command Line**
+        ```bash
+        export GOOGLE_API_KEY="your_api_key_here"
+        streamlit run app.py
+        ```
+        
+        **Get your API key from:** [Google AI Studio](https://makersuite.google.com/app/apikey)
         """)
 
 # Footer
 st.markdown("---")
-st.markdown("**⚠️ Security Note:** This app uses secure practices - your API key is not stored and is only used during your session.")
+st.markdown("**🛍️ Datacrumbs Sales Assistant** - Powered by website content scraping and AI")
 
 # Usage instructions
-with st.expander("📖 How to use this app"):
+with st.expander("📖 How to use the Sales Assistant"):
     st.markdown("""
-    1. **Enter API Key:** Provide your Google Gemini API key in the sidebar
-    2. **Wait for Loading:** The app will automatically load the Datacrumbs website content
-    3. **Ask Questions:** Type your question or use the quick question buttons
-    4. **View Answers:** The AI will respond based on website content or general knowledge
+    **🎯 Purpose:** This is a sales-focused chatbot that answers questions ONLY based on Datacrumbs website content.
     
-    **Question Types:**
-    - **Website-related:** Questions about Datacrumbs content will use the loaded website data
-    - **Creative/General:** Other questions will be answered using the AI's general knowledge
+    **✅ What I can help with:**
+    - Company information and background
+    - Services and products offered
+    - Pricing and package details
+    - Contact information and support
+    - Technical specifications
+    - Any other information found on the website
     
-    **Tips:**
-    - Be specific in your questions for better answers
-    - Check the chat history to see previous Q&As
-    - If you hit rate limits, wait a few minutes before asking more questions
+    **❌ What I cannot do:**
+    - Answer creative or general questions
+    - Provide information not on the website
+    - Make up information or speculate
+    
+    **💡 Tips for best results:**
+    - Ask specific questions about Datacrumbs services
+    - Use the quick question buttons for common inquiries
+    - Be direct and sales-focused in your questions
+    - If I can't find the answer, I'll suggest contacting Datacrumbs directly
     """)
+  
