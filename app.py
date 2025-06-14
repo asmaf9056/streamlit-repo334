@@ -53,6 +53,15 @@ try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except:
     api_key = os.getenv("GOOGLE_API_KEY")
+    
+# If still no key, try loading from .env file
+if not api_key:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        api_key = os.getenv("GOOGLE_API_KEY")
+    except:
+        pass
 
 if not api_key:
     st.error("⚠️ API Key not configured. Please set GOOGLE_API_KEY in your environment or Streamlit secrets.")
@@ -168,3 +177,4 @@ st.markdown("""
     Built with Streamlit & Google Gemini | Visit: <a href="https://datacrumbs.org" target="_blank">datacrumbs.org</a>
 </div>
 """, unsafe_allow_html=True)
+
