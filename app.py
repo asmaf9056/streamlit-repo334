@@ -83,7 +83,7 @@ for message in st.session_state.messages:
         st.write(message.content)
 
 # Chat input
-if prompt := st.chat_input("Ask me about Datacrumbs courses..."):
+if prompt := st.chat_input("💬 Your question here..."):
     # Add user message
     st.session_state.messages.append(HumanMessage(content=prompt))
     
@@ -108,9 +108,8 @@ if prompt := st.chat_input("Ask me about Datacrumbs courses..."):
 
 # Enrollment Form
 st.markdown("---")
-st.subheader("📝 Enroll Now")
 
-with st.form("enrollment_form"):
+with st.expander("📝 Enroll Now - Click to Open/Close", expanded=False):
     col1, col2 = st.columns(2)
     
     with col1:
@@ -160,6 +159,15 @@ with st.form("enrollment_form"):
             course_fee = course.split(" - Rs. ")[1] if " - Rs. " in course else "Contact for pricing"
             
             st.success("✅ Thank you! Your enrollment request has been submitted.")
+            
+            # Auto-scroll to bottom after form submission
+            st.markdown("""
+            <script>
+                setTimeout(function() {
+                    window.scrollTo(0, document.body.scrollHeight);
+                }, 100);
+            </script>
+            """, unsafe_allow_html=True)
             
             # Mini enrollment document
             st.markdown("""
@@ -212,4 +220,3 @@ with st.form("enrollment_form"):
 # Simple footer
 st.markdown("---")
 st.markdown("**Contact:** help@datacrumbs.org | +92 336 250 7273 | [datacrumbs.org](https://datacrumbs.org)")
-  
