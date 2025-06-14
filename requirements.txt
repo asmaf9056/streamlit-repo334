@@ -1,6 +1,6 @@
-streamlit
-requests
-beautifulsoup4
-langchain
-langchain-openai
-lxml
+streamlit>=1.28.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+langchain>=0.0.350
+langchain-openai>=0.0.5
+lxml>=4.9.0
