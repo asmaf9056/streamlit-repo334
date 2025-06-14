@@ -1,40 +1,59 @@
-import os
 import streamlit as st
+import asyncio
+import nest_asyncio
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
+from langchain_core.prompts import PromptTemplate
 
-st.set_page_config(page_title="📘 Datacrumbs Bot", layout="centered")
-st.title("📘 Datacrumbs QA Chatbot")
-st.caption("Ask anything about Datacrumbs.org or something creative!")
+# Fix event loop issues
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+nest_asyncio.apply()
 
-# Load and split website content
-@st.cache_resource(show_spinner="Loading Datacrumbs content...")
-def load_docs():
-    loader = WebBaseLoader("https://datacrumbs.org")
-    docs = loader.load()
+# Set Streamlit UI
+st.set_page_config(page_title="📘 Datacrumbs Chatbot")
+st.title("📘 Datacrumbs Info Chatbot")
+st.write("Ask me anything about Datacrumbs.org or even something creative!")
+
+# Load documents from the site
+@st.cache_data(show_spinner="Scraping website...")
+def load_documents():
+    loader = WebBaseLoader("https://datacrumbs.org/")
+    raw_docs = loader.load()
     splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    return splitter.split_documents(docs)
+    return splitter.split_documents(raw_docs)
 
-docs = load_docs()
+docs = load_documents()
 
-# Set API key and initialize model
-GEMINI_KEY = st.secrets["google_genai"]["google_api_key"]
-os.environ["GOOGLE_API_KEY"] = GEMINI_KEY
-llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
-qa_chain = load_qa_chain(llm, chain_type="stuff")
+# Set up Gemini Pro
+llm = ChatGoogleGenerativeAI(
+    model="gemini-pro",
+    google_api_key=st.secrets["google_genai"]["google_api_key"],
+    temperature=0.5,
+)
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# Define QA Chain
+prompt_template = """
+You are a helpful assistant that answers questions using content from Datacrumbs.org. 
+If the answer is not in the content, reply creatively.
 
+Question: {question}
+Context: {context}
+Answer:"""
+
+prompt = PromptTemplate.from_template(prompt_template)
+chain = load_qa_chain(llm, chain_type="stuff", prompt=prompt)
+
+# Get user query
 query = st.chat_input("Ask a question...")
+
 if query:
     with st.spinner("Thinking..."):
-        answer = qa_chain.run(input_documents=docs, question=query)
-    st.session_state.chat_history.append(("user", query))
-    st.session_state.chat_history.append(("bot", answer))
-
-for role, msg in st.session_state.chat_history:
-    with st.chat_message(role):
-        st.markdown(msg)
+        response = chain.run(input_documents=docs, question=query)
+        st.chat_message("user").markdown(query)
+        st.chat_message("assistant").markdown(response)
