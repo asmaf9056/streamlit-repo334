@@ -48,23 +48,12 @@ st.markdown("""
 st.title("🤖 Chat with Datacrumbs")
 st.markdown("Ask me anything about Datacrumbs or creative questions!")
 
-# Get API key from environment or Streamlit secrets
-try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-except:
-    api_key = os.getenv("GOOGLE_API_KEY")
-    
-# If still no key, try loading from .env file
-if not api_key:
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        api_key = os.getenv("GOOGLE_API_KEY")
-    except:
-        pass
+# Simple API key input for testing
+api_key = st.text_input("🔑 Enter your Google API Key:", type="password", help="Get your key from https://aistudio.google.com/app/apikey")
 
 if not api_key:
-    st.error("⚠️ API Key not configured. Please set GOOGLE_API_KEY in your environment or Streamlit secrets.")
+    st.warning("⚠️ Please enter your Google API Key above to start chatting.")
+    st.info("Get your free API key from: https://aistudio.google.com/app/apikey")
     st.stop()
 
 # Configure Gemini
@@ -177,4 +166,3 @@ st.markdown("""
     Built with Streamlit & Google Gemini | Visit: <a href="https://datacrumbs.org" target="_blank">datacrumbs.org</a>
 </div>
 """, unsafe_allow_html=True)
-
