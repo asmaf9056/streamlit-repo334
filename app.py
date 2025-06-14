@@ -5,16 +5,22 @@ from langchain.chat_models import ChatOpenAI
 from langchain.schema import AIMessage, HumanMessage, SystemMessage
 import time
 
-# Load Groq API key from secrets
-api_key = st.secrets["GROQ_API_KEY"]
+# Load Groq API key from secrets with error handling
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+except KeyError:
+    api_key = None
 
-# Set up LangChain LLM with Groq
-llm = ChatOpenAI(
-    model="llama3-70b-8192",
-    openai_api_key=api_key,
-    openai_api_base="https://api.groq.com/openai/v1",
-    temperature=0.5
-)
+# Set up LangChain LLM with Groq only if API key is available
+if api_key:
+    llm = ChatOpenAI(
+        model="llama3-70b-8192",
+        openai_api_key=api_key,
+        openai_api_base="https://api.groq.com/openai/v1",
+        temperature=0.5
+    )
+else:
+    llm = None
 
 # Enhanced scraping function for multiple pages
 @st.cache_data(show_spinner="Scraping Datacrumbs website...")
@@ -179,7 +185,7 @@ if "greeted" not in st.session_state:
 user_input = st.chat_input("Ask me about Datacrumbs courses, pricing, or services...")
 
 if user_input:
-    if not api_key:
+    if not api_key or not llm:
         with st.chat_message("assistant"):
             st.markdown("I don't understand. Please visit our website at [datacrumbs.org](https://datacrumbs.org) for more information.")
         st.stop()
