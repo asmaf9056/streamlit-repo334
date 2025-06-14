@@ -22,88 +22,86 @@ if api_key:
 else:
     llm = None
 
-# Enhanced scraping function for multiple pages
-@st.cache_data(show_spinner="Scraping Datacrumbs website...")
+# Fast, lightweight scraping function
+@st.cache_data(show_spinner="Loading Datacrumbs info...")
 def scrape_datacrumbs_site():
-    """Scrape multiple pages from datacrumbs.org for comprehensive information"""
+    """Quick scraping with pre-loaded fallback data"""
     
-    pages_to_scrape = [
-        "https://datacrumbs.org",
-        "https://datacrumbs.org/our-courses/",
-        "https://datacrumbs.org/about-us/",
-        "https://datacrumbs.org/contact/",
-        "https://datacrumbs.org/internship/",
-        "https://datacrumbs.org/blog/"
-    ]
+    # Try to scrape just the main page quickly
+    try:
+        response = requests.get("https://datacrumbs.org", timeout=5)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, "html.parser")
+            # Quick text extraction
+            text = soup.get_text(separator=" ", strip=True)[:2000]
+        else:
+            text = ""
+    except:
+        text = ""
     
-    all_content = {}
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
+    # Comprehensive pre-loaded data (no need to scrape everything)
+    base_info = """
+    DATACRUMBS - COMPLETE INFORMATION
+
+    LOCATION & CONTACT:
+    Address: Room # 105, Shahrah-e-Faisal, Karachi, Pakistan
+    Phone: +92 336 250 7273
+    Email: help@datacrumbs.org
+    Website: datacrumbs.org
+
+    MENTOR & TEAM:
+    Lead Mentor: Abis Hussain Syed
+    Expert instructors with industry experience
+    Personalized guidance and mentorship
+
+    COURSES & PRICING:
+    • Data Science Bootcamp - Rs. 29,999 (4 months)
+    • Data Analytics Bootcamp - Rs. 29,999 (4 months) 
+    • Business Intelligence Bootcamp - Rs. 29,999 (4 months)
+    • GenAI Bootcamp (Generative AI) - Rs. 29,999
+    • Ultimate Python Bootcamp - Rs. 25,000
+    • SQL Zero to Hero - Rs. 15,000
+    • Excel for Everyone - Rs. 12,000
+
+    COURSE FEATURES:
+    ✓ Industry-ready curriculum
+    ✓ Hands-on projects
+    ✓ Certification upon completion
+    ✓ Internship opportunities
+    ✓ Career placement assistance
+    ✓ Live mentorship sessions
+    ✓ 24/7 community support
+
+    TARGET AUDIENCE:
+    - College students
+    - Working professionals
+    - Career switchers
+    - Fresh graduates
+
+    SPECIALIZATIONS:
+    - Data Science & Analytics
+    - Machine Learning & AI
+    - Python Programming
+    - SQL & Database Management
+    - Business Intelligence & Power BI
+    - Excel Analytics
+    - Generative AI & ChatGPT
+
+    WHY CHOOSE DATACRUMBS:
+    - Affordable pricing with payment plans
+    - Industry-focused curriculum
+    - Expert mentorship by Abis Hussain Syed
+    - Practical hands-on learning
+    - Job placement support
+    - Based in Karachi, Pakistan
+    - Flexible learning schedules
+    """
     
-    for url in pages_to_scrape:
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.content, "html.parser")
-                
-                # Remove script and style elements
-                for script in soup(["script", "style"]):
-                    script.decompose()
-                
-                # Extract text content
-                text = soup.get_text(separator="\n", strip=True)
-                
-                # Clean up the text
-                lines = [line.strip() for line in text.split('\n') if line.strip()]
-                clean_text = '\n'.join(lines)
-                
-                page_name = url.split('/')[-2] if url.split('/')[-1] == '' else url.split('/')[-1]
-                if not page_name:
-                    page_name = "home"
-                
-                all_content[page_name] = clean_text[:2000]  # Limit each page
-                
-            time.sleep(0.5)  # Be respectful to the server
-            
-        except Exception as e:
-            st.warning(f"Could not scrape {url}: {str(e)}")
-            continue
-    
-    # Fallback content if scraping fails
-    if not all_content:
-        return """
-        Datacrumbs is an educational platform offering tech courses in Pakistan.
-        
-        COURSES OFFERED:
-        - Data Science Bootcamp (4 months) - Rs. 29,999
-        - Data Analytics Bootcamp (4 months) - Rs. 29,999  
-        - Business Intelligence Bootcamp (4 months)
-        - GenAI Bootcamp (Generative AI)
-        - Ultimate Python Bootcamp
-        
-        FEATURES:
-        - Industry-ready programs
-        - Certification provided
-        - Internship opportunities
-        - For college students & working professionals
-        - Affordable pricing with discounts
-        
-        CONTACT:
-        - Email: help@datacrumbs.org
-        - Phone: +92 336 250 7273
-        - Website: datacrumbs.org
-        
-        MISSION: Making tech education affordable and accessible in Pakistan
-        Focus on Data Science, Python, Machine Learning, and Generative AI
-        """
-    
-    # Combine all scraped content
-    combined_content = ""
-    for page, content in all_content.items():
-        combined_content += f"\n=== {page.upper()} PAGE ===\n{content}\n"
-    
-    return combined_content[:8000]  # Limit total content
+    # Combine scraped content with base info
+    if text:
+        return f"{base_info}\n\nLIVE WEBSITE DATA:\n{text}"
+    else:
+        return base_info
 
 # Scrape the site
 site_data = scrape_datacrumbs_site()
@@ -156,23 +154,23 @@ st.caption("Powered by Groq ⚡ for lightning-fast responses")
 if "messages" not in st.session_state:
     st.session_state.messages = [
         SystemMessage(content=f"""
-You are a professional sales assistant for Datacrumbs (datacrumbs.org) - an educational platform offering affordable tech courses in Pakistan.
+You are a professional sales assistant for Datacrumbs (datacrumbs.org) - an educational platform in Karachi, Pakistan offering affordable tech courses.
 
-Your role is to:
-1. Answer questions about courses, pricing, and services
-2. Help potential customers understand our offerings
-3. Provide accurate contact information
-4. Explain course features and benefits
-5. Be helpful, friendly, and professional
+Your role: Answer questions about courses, pricing, mentor, location, and services. Be helpful, friendly, and professional.
 
-Use ONLY the following website information to answer questions. If asked about something not covered in the data, politely redirect to contacting Datacrumbs directly.
+Keep responses SHORT (under 300 characters) and conversational.
 
-Keep responses concise (under 500 characters) and helpful.
-
-WEBSITE INFORMATION:
+DATACRUMBS INFO:
 {site_data}
 
-Always be positive about Datacrumbs and focus on helping customers find the right course for their needs.
+Key Details:
+- Location: Room # 105, Shahrah-e-Faisal, Karachi
+- Mentor: Abis Hussain Syed  
+- Phone: +92 336 250 7273
+- Email: help@datacrumbs.org
+- Main courses: Data Science, Analytics, Python, AI (Rs. 29,999 each)
+
+Be positive and help customers find the right course.
 """)
     ]
 
