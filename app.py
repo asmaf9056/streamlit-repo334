@@ -78,14 +78,17 @@ with st.sidebar:
     if st.button("🌐 Load Website Content", disabled=not api_key):
         with st.spinner("Loading Datacrumbs website content..."):
             try:
-                # Load website content
-                loader = WebBaseLoader("https://datacrumbs.org/")
+                # Load website content with timeout
+                loader = WebBaseLoader(
+                    "https://datacrumbs.org/",
+                    requests_kwargs={"timeout": 10}
+                )
                 documents = loader.load()
                 
-                # Split text into chunks
+                # Split text into smaller, faster chunks
                 text_splitter = CharacterTextSplitter(
-                    chunk_size=1000,
-                    chunk_overlap=200
+                    chunk_size=500,
+                    chunk_overlap=50
                 )
                 st.session_state.docs = text_splitter.split_documents(documents)
                 st.session_state.website_content = True
@@ -155,20 +158,26 @@ else:
         # Generate response
         with st.spinner("🤔 Thinking..."):
             try:
-                # Initialize the language model
-                llm = GoogleGenerativeAI(model="gemini-pro", temperature=0.7)
+                # Initialize the language model with faster settings
+                llm = GoogleGenerativeAI(
+                    model="gemini-1.5-flash", 
+                    temperature=0.3,
+                    max_output_tokens=150
+                )
                 
                 # Check if question is about the website and we have content
                 if st.session_state.website_content and any(keyword in user_question.lower() for keyword in 
                     ['datacrumbs', 'website', 'service', 'about', 'offer', 'company', 'team', 'what is']):
                     
-                    # Use QA chain for website-related questions
+                    # Use only first few chunks for faster response
+                    relevant_docs = st.session_state.docs[:3]
                     chain = load_qa_chain(llm, chain_type="stuff")
-                    response = chain.run(input_documents=st.session_state.docs, question=user_question)
+                    response = chain.run(input_documents=relevant_docs, question=user_question)
                     
                 else:
-                    # Direct LLM response for creative or general questions
-                    response = llm.invoke(user_question)
+                    # Direct LLM response for creative questions
+                    prompt = f"Answer briefly: {user_question}"
+                    response = llm.invoke(prompt)
                 
                 # Add bot response to chat
                 st.session_state.messages.append({
