@@ -1,203 +1,170 @@
 import streamlit as st
+import google.generativeai as genai
 import os
-from langchain.document_loaders import WebBaseLoader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.chains.question_answering import load_qa_chain
-from langchain_google_genai import GoogleGenerativeAI
-import datetime
+from datetime import datetime
 
-# Page config
+# Configure page
 st.set_page_config(
-    page_title="Datacrumbs Chat App",
+    page_title="Datacrumbs Chat",
     page_icon="🤖",
-    layout="wide"
+    layout="centered"
 )
 
-# Custom CSS
+# Custom CSS for chat interface
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #2E86AB;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .chat-message {
+    .chat-container {
+        max-height: 400px;
+        overflow-y: auto;
         padding: 1rem;
+        border: 1px solid #ddd;
         border-radius: 10px;
         margin: 1rem 0;
-        border-left: 4px solid #2E86AB;
-        background-color: #f8f9fa;
     }
-    .user-message {
+    .user-msg {
         background-color: #e3f2fd;
-        border-left-color: #1976d2;
+        padding: 0.8rem;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+        border-left: 4px solid #2196f3;
     }
-    .bot-message {
+    .bot-msg {
         background-color: #f1f8e9;
-        border-left-color: #388e3c;
+        padding: 0.8rem;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+        border-left: 4px solid #4caf50;
     }
-    .sample-questions {
+    .sample-box {
         background-color: #fff3e0;
         padding: 1rem;
-        border-radius: 10px;
+        border-radius: 8px;
         margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'website_content' not in st.session_state:
-    st.session_state.website_content = None
-if 'docs' not in st.session_state:
-    st.session_state.docs = None
+# App title
+st.title("🤖 Chat with Datacrumbs")
+st.markdown("Ask me anything about Datacrumbs or creative questions!")
 
-# Main header
-st.markdown('<h1 class="main-header">🤖 Chat with Datacrumbs Website</h1>', unsafe_allow_html=True)
+# Get API key from environment or Streamlit secrets
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+except:
+    api_key = os.getenv("GOOGLE_API_KEY")
 
-# Sidebar for API key and controls
-with st.sidebar:
-    st.header("🔑 Configuration")
-    
-    # API Key input
-    api_key = st.text_input(
-        "Enter your Google Gemini API Key:",
-        type="password",
-        help="Get your API key from https://makersuite.google.com/app/apikey"
-    )
-    
-    if api_key:
-        os.environ["GOOGLE_API_KEY"] = api_key
-        st.success("✅ API Key configured!")
-    
-    st.markdown("---")
-    
-    # Load website button
-    if st.button("🌐 Load Website Content", disabled=not api_key):
-        with st.spinner("Loading Datacrumbs website content..."):
-            try:
-                # Load website content with timeout
-                loader = WebBaseLoader(
-                    "https://datacrumbs.org/",
-                    requests_kwargs={"timeout": 10}
-                )
-                documents = loader.load()
-                
-                # Split text into smaller, faster chunks
-                text_splitter = CharacterTextSplitter(
-                    chunk_size=500,
-                    chunk_overlap=50
-                )
-                st.session_state.docs = text_splitter.split_documents(documents)
-                st.session_state.website_content = True
-                
-                st.success(f"✅ Loaded {len(st.session_state.docs)} document chunks!")
-                
-            except Exception as e:
-                st.error(f"❌ Error loading website: {str(e)}")
-    
-    # Chat statistics
-    if st.session_state.messages:
-        st.markdown("---")
-        st.subheader("📊 Chat Stats")
-        st.metric("Total Messages", len(st.session_state.messages))
-    
-    # Clear chat button
-    if st.button("🗑️ Clear Chat History"):
-        st.session_state.messages = []
-        st.rerun()
-
-# Main chat interface
 if not api_key:
-    st.warning("⚠️ Please enter your Google Gemini API key in the sidebar to start chatting.")
-    st.info("Get your free API key from: https://makersuite.google.com/app/apikey")
-else:
-    # Sample questions
-    st.markdown("""
-    <div class="sample-questions">
-        <h3>💡 Sample Questions to Try:</h3>
-        <p><strong>About Datacrumbs:</strong></p>
-        <ul>
-            <li>What is Datacrumbs about?</li>
-            <li>What services does Datacrumbs offer?</li>
-            <li>Who is behind Datacrumbs?</li>
-        </ul>
-        <p><strong>Creative Questions:</strong></p>
-        <ul>
-            <li>Write a haiku about data science</li>
-            <li>Tell me a story about a data scientist who discovers magic</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Chat messages display
+    st.error("⚠️ API Key not configured. Please set GOOGLE_API_KEY in your environment or Streamlit secrets.")
+    st.stop()
+
+# Configure Gemini
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+# Sample website content (simulated for speed)
+DATACRUMBS_INFO = """
+Datacrumbs is a data analytics platform that helps businesses transform raw data into actionable insights. 
+We specialize in:
+- Data visualization and dashboard creation
+- Analytics consulting and strategy
+- Data science training and workshops
+- Business intelligence solutions
+
+Founded by experienced data scientists, Datacrumbs serves companies of all sizes to make data-driven decisions.
+Our mission is to make data analytics accessible and valuable for every organization.
+"""
+
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Sample questions
+st.markdown("""
+<div class="sample-box">
+    <h4>💡 Try these questions:</h4>
+    <p><strong>About Datacrumbs:</strong></p>
+    <ul>
+        <li>What is Datacrumbs?</li>
+        <li>What services do you offer?</li>
+        <li>Who founded Datacrumbs?</li>
+    </ul>
+    <p><strong>Creative:</strong></p>
+    <ul>
+        <li>Write a haiku about data science</li>
+        <li>Tell me a story about magic spreadsheets</li>
+    </ul>
+</div>
+""", unsafe_allow_html=True)
+
+# Display chat history
+if st.session_state.messages:
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     for message in st.session_state.messages:
-        message_class = "user-message" if message["role"] == "user" else "bot-message"
-        st.markdown(f"""
-        <div class="chat-message {message_class}">
-            <strong>{"🧑 You" if message["role"] == "user" else "🤖 Assistant"}:</strong><br>
-            {message["content"]}
-            <br><small>{message["timestamp"]}</small>
-        </div>
-        """, unsafe_allow_html=True)
+        if message["role"] == "user":
+            st.markdown(f"""
+            <div class="user-msg">
+                <strong>🧑 You:</strong><br>
+                {message["content"]}
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="bot-msg">
+                <strong>🤖 Assistant:</strong><br>
+                {message["content"]}
+            </div>
+            """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Chat input
+user_input = st.text_input("💬 Your question:", placeholder="Type your message here...", key="user_input")
+
+if user_input:
+    # Add user message
+    st.session_state.messages.append({"role": "user", "content": user_input})
     
-    # User input
-    user_question = st.text_input("💬 Ask a question:", placeholder="Type your question here...")
-    
-    if user_question:
-        # Add user message to chat
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.session_state.messages.append({
-            "role": "user",
-            "content": user_question,
-            "timestamp": timestamp
-        })
+    # Generate response
+    try:
+        # Check if question is about Datacrumbs
+        if any(keyword in user_input.lower() for keyword in 
+               ['datacrumbs', 'service', 'offer', 'company', 'about', 'what is', 'founded', 'team']):
+            
+            # Website-related response
+            prompt = f"""
+            Based on this information about Datacrumbs: {DATACRUMBS_INFO}
+            
+            Question: {user_input}
+            
+            Please provide a helpful answer about Datacrumbs based on the information provided.
+            """
+        else:
+            # Creative/general response
+            prompt = f"Please answer this question in a helpful and creative way: {user_input}"
         
-        # Generate response
-        with st.spinner("🤔 Thinking..."):
-            try:
-                # Initialize the language model with faster settings
-                llm = GoogleGenerativeAI(
-                    model="gemini-1.5-flash", 
-                    temperature=0.3,
-                    max_output_tokens=150
-                )
-                
-                # Check if question is about the website and we have content
-                if st.session_state.website_content and any(keyword in user_question.lower() for keyword in 
-                    ['datacrumbs', 'website', 'service', 'about', 'offer', 'company', 'team', 'what is']):
-                    
-                    # Use only first few chunks for faster response
-                    relevant_docs = st.session_state.docs[:3]
-                    chain = load_qa_chain(llm, chain_type="stuff")
-                    response = chain.run(input_documents=relevant_docs, question=user_question)
-                    
-                else:
-                    # Direct LLM response for creative questions
-                    prompt = f"Answer briefly: {user_question}"
-                    response = llm.invoke(prompt)
-                
-                # Add bot response to chat
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": response,
-                    "timestamp": timestamp
-                })
-                
-                # Rerun to update chat display
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"❌ Error generating response: {str(e)}")
-                st.info("💡 Make sure your API key is correct and you have internet connection.")
+        # Get response from Gemini
+        response = model.generate_content(prompt)
+        bot_response = response.text
+        
+        # Add bot response
+        st.session_state.messages.append({"role": "assistant", "content": bot_response})
+        
+        # Refresh to show new messages
+        st.rerun()
+        
+    except Exception as e:
+        st.error(f"❌ Error: {str(e)}")
+        st.info("Please try again or rephrase your question.")
+
+# Clear chat button
+if st.button("🗑️ Clear Chat", type="secondary"):
+    st.session_state.messages = []
+    st.rerun()
 
 # Footer
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; color: #666;">
-    <p>Built with ❤️ using Streamlit, LangChain, and Google Gemini API</p>
-    <p>Website: <a href="https://datacrumbs.org/" target="_blank">datacrumbs.org</a></p>
+<div style="text-align: center; color: #666; font-size: 0.8rem;">
+    Built with Streamlit & Google Gemini | Visit: <a href="https://datacrumbs.org" target="_blank">datacrumbs.org</a>
 </div>
 """, unsafe_allow_html=True)
