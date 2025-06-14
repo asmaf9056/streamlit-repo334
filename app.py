@@ -108,9 +108,8 @@ if prompt := st.chat_input("💬 Your question here..."):
 
 # Enrollment Form
 st.markdown("---")
-st.subheader("📝 Enroll Now")
 
-with st.form("enrollment_form"):
+with st.expander("📝 Enroll Now - Click to Open/Close", expanded=False):
     col1, col2 = st.columns(2)
     
     with col1:
