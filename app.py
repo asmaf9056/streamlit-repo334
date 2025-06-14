@@ -109,3 +109,4 @@ if prompt := st.chat_input("Ask me about Datacrumbs courses..."):
 # Simple footer
 st.markdown("---")
 st.markdown("**Contact:** help@datacrumbs.org | +92 336 250 7273 | [datacrumbs.org](https://datacrumbs.org)")
+
