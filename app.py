@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import CharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain.chains.question_answering import load_qa_chain
 from langchain.schema import Document
 import time
@@ -21,7 +21,7 @@ st.markdown("**Your AI sales assistant for http://www.datacrumbs.org**")
 st.markdown("*Ask me anything about Datacrumbs services, products, pricing, or company information!*")
 
 # Load API key from environment variable
-api_key = os.getenv('GOOGLE_API_KEY')
+api_key = os.getenv('GROQ_API_KEY')
 
 # Sidebar for information
 with st.sidebar:
@@ -29,9 +29,10 @@ with st.sidebar:
     
     if api_key:
         st.success("Sales Assistant Ready ✅")
+        st.info("Powered by Groq ⚡")
     else:
-        st.error("API Key not found in environment variables")
-        st.markdown("Please set GOOGLE_API_KEY environment variable")
+        st.error("Groq API Key not found in environment variables")
+        st.markdown("Please set GROQ_API_KEY environment variable")
     
     st.markdown("---")
     st.markdown("### 💼 What I can help with:")
@@ -43,6 +44,20 @@ with st.sidebar:
     - **Technical Specs** - Product features
     - **Support** - Customer service info
     """)
+    
+    st.markdown("---")
+    st.markdown("### 🚀 Model Selection:")
+    model_choice = st.selectbox(
+        "Choose Groq Model:",
+        [
+            "llama3-8b-8192",
+            "llama3-70b-8192", 
+            "mixtral-8x7b-32768",
+            "gemma-7b-it"
+        ],
+        index=0,
+        help="Different models offer varying speed/quality tradeoffs"
+    )
 
 # Initialize session state
 if 'website_loaded' not in st.session_state:
@@ -80,8 +95,8 @@ def load_website_content():
             
             # Split text into chunks for better processing
             text_splitter = CharacterTextSplitter(
-                chunk_size=1500,  # Larger chunks for better context
-                chunk_overlap=300,
+                chunk_size=2000,  # Groq models can handle larger chunks
+                chunk_overlap=200,
                 separator="\n\n"  # Split on paragraphs first
             )
             
@@ -97,18 +112,21 @@ def load_website_content():
         st.info("Please check if the website is accessible and try again.")
         return []
 
-def get_answer(question: str, documents: List[Document], api_key: str):
-    """Get answer using LangChain and Google Gemini - Website content only"""
+def get_answer(question: str, documents: List[Document], api_key: str, model: str):
+    """Get answer using LangChain and Groq - Website content only"""
     try:
         # Check if we have website content
         if not documents or len(documents) == 0:
             return "❌ **Website Content Not Available**\n\nI need to load the Datacrumbs website content first to answer your questions. Please wait for the content to load or refresh the page."
         
-        # Initialize the Google Gemini LLM with settings optimized for sales
-        llm = GoogleGenerativeAI(
-            model="gemini-pro",
-            google_api_key=api_key,
-            temperature=0.2  # Low temperature for factual, consistent responses
+        # Initialize the Groq LLM with settings optimized for sales
+        llm = ChatGroq(
+            model=model,
+            groq_api_key=api_key,
+            temperature=0.2,  # Low temperature for factual, consistent responses
+            max_tokens=1024,  # Reasonable response length
+            timeout=30,  # 30 second timeout
+            max_retries=2
         )
         
         # Create QA chain with sales-focused prompting
@@ -118,16 +136,19 @@ def get_answer(question: str, documents: List[Document], api_key: str):
         )
         
         # Get answer
-        with st.spinner("🔍 Searching Datacrumbs website content..."):
-            # Add rate limiting
-            time.sleep(1)
+        with st.spinner("🚀 Processing with Groq (Lightning Fast!)..."):
+            # Groq is fast, minimal delay needed
+            time.sleep(0.2)
             
             # Always use website content and frame as sales assistant
             sales_prompt = f"""You are a helpful sales assistant for Datacrumbs. Based ONLY on the provided website content, answer the following question about Datacrumbs services, products, or company information. 
 
-If the information is not available in the website content, politely say so and suggest contacting Datacrumbs directly.
-
-Be professional, helpful, and sales-oriented in your response.
+Key instructions:
+- Only use information from the provided website content
+- If information is not available in the content, politely say so and suggest contacting Datacrumbs directly
+- Be professional, helpful, and sales-oriented in your response
+- Provide specific details when available
+- Format your response clearly and professionally
 
 Question: {question}"""
             
@@ -136,13 +157,15 @@ Question: {question}"""
                 question=sales_prompt
             )
             
-            return f"🛍️ **Datacrumbs Sales Assistant:**\n\n{response}\n\n---\n*Need more information? Contact Datacrumbs directly for detailed assistance.*"
+            return f"🛍️ **Datacrumbs Sales Assistant (via Groq ⚡):**\n\n{response}\n\n---\n*Need more information? Contact Datacrumbs directly for detailed assistance.*"
             
     except Exception as e:
-        if "quota" in str(e).lower() or "limit" in str(e).lower():
-            return "⚠️ **API Quota Exceeded**\n\nOur service is temporarily unavailable due to high demand. Please try again in a few minutes."
+        if "quota" in str(e).lower() or "limit" in str(e).lower() or "rate" in str(e).lower():
+            return "⚠️ **API Rate Limit Reached**\n\nGroq API rate limit exceeded. Please wait a moment and try again."
         elif "api" in str(e).lower() and "key" in str(e).lower():
-            return "🔑 **Service Configuration Error**\n\nPlease contact support - there's an issue with our API configuration."
+            return "🔑 **Service Configuration Error**\n\nPlease contact support - there's an issue with our Groq API configuration."
+        elif "timeout" in str(e).lower():
+            return "⏱️ **Request Timeout**\n\nThe request took too long. Please try a simpler question or try again."
         else:
             return f"❌ **Service Error**\n\nSorry, I'm experiencing technical difficulties. Please try again or contact Datacrumbs directly.\n\nError details: {str(e)}"
 
@@ -192,7 +215,7 @@ if api_key:
         )
     
     with col2:
-        ask_button = st.button("Ask", type="primary", use_container_width=True)
+        ask_button = st.button("Ask ⚡", type="primary", use_container_width=True)
     
     # Quick question buttons - Sales focused
     st.markdown("**Quick Questions:**")
@@ -222,12 +245,12 @@ if api_key:
     if ask_button and question:
         # Always use website content for sales assistance
         if st.session_state.documents:
-            st.info("🔍 Searching Datacrumbs website for your answer...")
+            st.info("🚀 Processing with Groq - Lightning fast responses!")
         else:
             st.error("⚠️ Website content not loaded - please wait for content to load first.")
         
         # Get answer (always use website content)
-        answer = get_answer(question, st.session_state.documents, api_key)
+        answer = get_answer(question, st.session_state.documents, api_key, model_choice)
         
         # Display answer
         st.markdown("---")
@@ -244,34 +267,42 @@ if api_key:
         st.experimental_rerun()
 
 else:
-    st.error("🔑 Google API Key not found!")
-    st.info("The sales assistant needs an API key to function. Please set up your environment variable.")
+    st.error("🔑 Groq API Key not found!")
+    st.info("The sales assistant needs a Groq API key to function. Please set up your environment variable.")
     
     # Instructions for setting up environment variable
-    with st.expander("🔧 How to set up the environment variable"):
+    with st.expander("🔧 How to set up the Groq API Key"):
         st.markdown("""
         **Option 1: .env file (Recommended)**
         1. Create a `.env` file in your project directory
-        2. Add this line: `GOOGLE_API_KEY=your_api_key_here`
+        2. Add this line: `GROQ_API_KEY=your_groq_api_key_here`
         3. Make sure to add `.env` to your `.gitignore` file
         
         **Option 2: Command Line**
         ```bash
-        export GOOGLE_API_KEY="your_api_key_here"
+        export GROQ_API_KEY="your_groq_api_key_here"
         streamlit run app.py
         ```
         
-        **Get your API key from:** [Google AI Studio](https://makersuite.google.com/app/apikey)
+        **Get your Groq API key from:** [Groq Console](https://console.groq.com/keys)
+        
+        **Why Groq?**
+        - ⚡ Ultra-fast inference speeds
+        - 🎯 High-quality responses
+        - 💰 Competitive pricing
+        - 🚀 Optimized for production workloads
         """)
 
 # Footer
 st.markdown("---")
-st.markdown("**🛍️ Datacrumbs Sales Assistant** - Powered by website content scraping and AI")
+st.markdown("**🛍️ Datacrumbs Sales Assistant** - Powered by Groq ⚡ for lightning-fast responses")
 
 # Usage instructions
 with st.expander("📖 How to use the Sales Assistant"):
     st.markdown("""
     **🎯 Purpose:** This is a sales-focused chatbot that answers questions ONLY based on Datacrumbs website content.
+    
+    **⚡ Powered by Groq:** Ultra-fast AI inference for instant responses!
     
     **✅ What I can help with:**
     - Company information and background
@@ -291,5 +322,10 @@ with st.expander("📖 How to use the Sales Assistant"):
     - Use the quick question buttons for common inquiries
     - Be direct and sales-focused in your questions
     - If I can't find the answer, I'll suggest contacting Datacrumbs directly
+    
+    **🚀 Model Information:**
+    - **llama3-8b-8192**: Fast, efficient, good for most queries
+    - **llama3-70b-8192**: More powerful, better for complex questions
+    - **mixtral-8x7b-32768**: Large context window, good for detailed analysis
+    - **gemma-7b-it**: Optimized for instruction following
     """)
-  
