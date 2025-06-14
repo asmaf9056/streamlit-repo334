@@ -3,5 +3,5 @@ beautifulsoup4
 requests
 langchain
 langchain-google-genai
-google-generativeai
+langchain-community
 nest_asyncio
