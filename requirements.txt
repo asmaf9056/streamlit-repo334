@@ -1,6 +1,7 @@
-streamlit==1.32.0
-langchain>=0.0.370
-langchain-google-genai>=0.5.0
-langchain-community>=0.0.10
+streamlit
 beautifulsoup4
 requests
+langchain
+langchain-google-genai
+google-generativeai
+nest_asyncio
