@@ -135,13 +135,20 @@ if user_input:
             Question: {user_input}
             
             Please provide a helpful answer about Datacrumbs based on the information provided.
+            Keep it concise and informative.
             """
         else:
-            # Creative/general response
-            prompt = f"Please answer this question in a helpful and creative way: {user_input}"
+            # Creative/general response - keep it short and varied
+            prompt = f"Give a brief, helpful response to: {user_input}"
         
-        # Get response from Gemini
-        response = model.generate_content(prompt)
+        # Get response from Gemini with rate limiting
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=100,
+                temperature=0.7,
+            )
+        )
         bot_response = response.text
         
         # Add bot response
@@ -151,8 +158,12 @@ if user_input:
         st.rerun()
         
     except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
-        st.info("Please try again or rephrase your question.")
+        if "429" in str(e) or "quota" in str(e).lower():
+            st.error("⏰ **Rate limit reached!** Please wait 1-2 minutes before asking another question.")
+            st.info("💡 Free tier allows 15 requests per minute. Consider upgrading for unlimited usage.")
+        else:
+            st.error(f"❌ Error: {str(e)}")
+            st.info("Please try again or rephrase your question.")
 
 # Clear chat button
 if st.button("🗑️ Clear Chat", type="secondary"):
